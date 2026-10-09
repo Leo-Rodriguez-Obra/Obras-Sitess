@@ -1,0 +1,1881 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBRAS SITES - Kanban de Seguimiento</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#0f172a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.03);
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.5);
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.8);
+    }
+
+    .drag-over-column {
+      background-color: rgba(224, 242, 254, 0.7) !important;
+      border: 2px dashed #0284c7 !important;
+    }
+
+    .card-dragging {
+      opacity: 0.4;
+      transform: scale(0.98);
+    }
+
+    .card-slide-item {
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 antialiased selection:bg-sky-500 selection:text-white">
+  <div id="root" class="h-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const DEFAULT_BOARDS = [
+      { id: 'board-1', name: 'Despliegue Obras Sites', description: 'Seguimiento principal de infraestructura y torres' },
+      { id: 'board-2', name: 'Mantenimiento & Reformas', description: 'Adecuaciones y mantenimientos preventivos' }
+    ];
+
+    const COLOR_THEMES = [
+      { id: 'slate', label: 'Gris Slate', color: 'border-slate-400', bg: 'bg-slate-100', text: 'text-slate-700', badge: 'bg-slate-200 text-slate-800' },
+      { id: 'amber', label: 'Ámbar', color: 'border-amber-400', bg: 'bg-amber-50/50', text: 'text-amber-800', badge: 'bg-amber-100 text-amber-900' },
+      { id: 'blue', label: 'Azul', color: 'border-blue-500', bg: 'bg-blue-50/50', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-900' },
+      { id: 'red', label: 'Rojo', color: 'border-red-500', bg: 'bg-red-50/50', text: 'text-red-800', badge: 'bg-red-100 text-red-900' },
+      { id: 'emerald', label: 'Esmeralda', color: 'border-emerald-500', bg: 'bg-emerald-50/50', text: 'text-emerald-800', badge: 'bg-emerald-100 text-emerald-900' },
+      { id: 'purple', label: 'Púrpura', color: 'border-purple-500', bg: 'bg-purple-50/50', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-900' },
+      { id: 'indigo', label: 'Índigo', color: 'border-indigo-500', bg: 'bg-indigo-50/50', text: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-900' },
+      { id: 'teal', label: 'Turquesa', color: 'border-teal-500', bg: 'bg-teal-50/50', text: 'text-teal-800', badge: 'bg-teal-100 text-teal-900' },
+      { id: 'orange', label: 'Naranja', color: 'border-orange-500', bg: 'bg-orange-50/50', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-900' }
+    ];
+
+    const ICON_OPTIONS = [
+      { id: 'fa-clock', label: 'Reloj / Espera', icon: 'fa-solid fa-clock' },
+      { id: 'fa-compass', label: 'Brújula / Plan', icon: 'fa-solid fa-compass' },
+      { id: 'fa-helmet-safety', label: 'Casco / Obra', icon: 'fa-solid fa-helmet-safety' },
+      { id: 'fa-triangle-exclamation', label: 'Alerta / Traba', icon: 'fa-solid fa-triangle-exclamation' },
+      { id: 'fa-circle-check', label: 'Check / Fin', icon: 'fa-solid fa-circle-check' },
+      { id: 'fa-list-check', label: 'Lista / Tareas', icon: 'fa-solid fa-list-check' },
+      { id: 'fa-truck-fast', label: 'Logística', icon: 'fa-solid fa-truck-fast' },
+      { id: 'fa-plug-circle-bolt', label: 'Energía / EE', icon: 'fa-solid fa-plug-circle-bolt' },
+      { id: 'fa-file-signature', label: 'Contratos / Permisos', icon: 'fa-solid fa-file-signature' },
+      { id: 'fa-flag-checkered', label: 'Meta', icon: 'fa-solid fa-flag-checkered' }
+    ];
+
+    const DEFAULT_COLUMNS = [
+      { id: 'pendientes', name: 'Pendientes', color: 'border-slate-400', bg: 'bg-slate-100', text: 'text-slate-700', badge: 'bg-slate-200 text-slate-800', icon: 'fa-solid fa-clock' },
+      { id: 'planificacion', name: 'En Planificación', color: 'border-amber-400', bg: 'bg-amber-50/50', text: 'text-amber-800', badge: 'bg-amber-100 text-amber-900', icon: 'fa-solid fa-compass' },
+      { id: 'ejecucion', name: 'En Ejecución', color: 'border-blue-500', bg: 'bg-blue-50/50', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-900', icon: 'fa-solid fa-helmet-safety' },
+      { id: 'bloqueado', name: 'Bloqueado', color: 'border-red-500', bg: 'bg-red-50/50', text: 'text-red-800', badge: 'bg-red-100 text-red-900', icon: 'fa-solid fa-triangle-exclamation' },
+      { id: 'finalizado', name: 'Finalizado', color: 'border-emerald-500', bg: 'bg-emerald-50/50', text: 'text-emerald-800', badge: 'bg-emerald-100 text-emerald-900', icon: 'fa-solid fa-circle-check' }
+    ];
+
+    const ETAPAS_LIST = [
+      { id: 'relevamiento', label: 'RELEVAMIENTO' },
+      { id: 'gestion_candidato', label: 'GESTION CANDIDATO' },
+      { id: 'contrato', label: 'CONTRATO' },
+      { id: 'ingenieria', label: 'INGENIERIA' },
+      { id: 'mc_cimentacion', label: 'MC CIMENTACION' },
+      { id: 'energia_pilar', label: 'ENERGIA - PILAR' },
+      { id: 'ee_conexion', label: 'EE CONEXIÓN' },
+      { id: 'logistica_previa', label: 'LOGISTICA PREVIA' },
+      { id: 'estructura_prov', label: 'ESTRUCT. PROV' }
+    ];
+
+    const ESTADOS_OBRA_LIST = ['Excavación', 'Fundación', 'Cota 0', 'Montaje'];
+
+    const CONTRATISTAS_DEFAULT = [
+      'RAUL',
+      'Ingeniería & Obras S.A.',
+      'Constructora del Sur',
+      'ElectroMontajes B.A.',
+      'Telecom Infraestructuras',
+      'Techint Infraestructura',
+      'Servicios y Montajes S.R.L.'
+    ];
+
+    const ESTRUCTURAS_DEFAULT = [
+      'TAS 45 MER',
+      'Torre Autosoportada 30m',
+      'Monopolo 24m',
+      'Edificio Roof-Top',
+      'Poste Hormigón H30',
+      'Mástil Arriostrado 42m'
+    ];
+
+    const INITIAL_PROJECTS = [
+      {
+        id: 'proj-101',
+        boardId: 'board-1',
+        code: 'TU00305',
+        title: 'Alderetes M1',
+        columnId: 'ejecucion',
+        contratista: 'RAUL',
+        estructura: 'TAS 45 MER',
+        estadoObra: 'Fundación',
+        fechaInicio: '5/10/26',
+        fechaFin: '30/10/26',
+        prioridad: 'Alta',
+        ubicacion: 'Tucumán, Alderetes',
+        notas: 'Obra en ejecución. MC Cimentación completada. Inspección de pilar de energía agendada.',
+        etapas: {
+          relevamiento: 'green', contrato: 'green', gestion_candidato: 'green',
+          mc_cimentacion: 'green', ingenieria: 'green', energia_pilar: 'yellow',
+          ee_conexion: 'yellow', logistica_previa: 'green', estructura_prov: 'green'
+        }
+      },
+      {
+        id: 'proj-102',
+        boardId: 'board-1',
+        code: 'OBR2026-002',
+        title: 'Monopolo San Martín',
+        columnId: 'planificacion',
+        contratista: 'Constructora del Sur',
+        estructura: 'Monopolo 24m',
+        estadoObra: 'Excavación',
+        fechaInicio: '10/10/26',
+        fechaFin: '1/12/26',
+        prioridad: 'Media',
+        ubicacion: 'San Martín, GBA',
+        notas: 'Permiso municipal aprobado. Esperando firma de contrato.',
+        etapas: {
+          relevamiento: 'green', contrato: 'yellow', gestion_candidato: 'green',
+          mc_cimentacion: 'gray', ingenieria: 'yellow', energia_pilar: 'gray',
+          ee_conexion: 'gray', logistica_previa: 'gray', estructura_prov: 'gray'
+        }
+      },
+      {
+        id: 'proj-103',
+        boardId: 'board-1',
+        code: 'OBR2026-003',
+        title: 'Roof-Top Microcentro',
+        columnId: 'bloqueado',
+        contratista: 'ElectroMontajes B.A.',
+        estructura: 'Edificio Roof-Top',
+        estadoObra: 'Cota 0',
+        fechaInicio: '15/8/26',
+        fechaFin: '30/10/26',
+        prioridad: 'Alta',
+        ubicacion: 'CABA Centro',
+        notas: 'BLOQUEO: Conflicto con el consorcio de propietarios.',
+        etapas: {
+          relevamiento: 'green', contrato: 'green', gestion_candidato: 'red',
+          mc_cimentacion: 'green', ingenieria: 'green', energia_pilar: 'yellow',
+          ee_conexion: 'gray', logistica_previa: 'red', estructura_prov: 'gray'
+        }
+      },
+      {
+        id: 'proj-104',
+        boardId: 'board-1',
+        code: 'TU00412',
+        title: 'Lomas de Zamora S1',
+        columnId: 'pendientes',
+        contratista: 'RAUL',
+        estructura: 'Torre Autosoportada 30m',
+        fechaInicio: '1/11/26',
+        fechaFin: '15/12/26',
+        prioridad: 'Media',
+        ubicacion: 'Lomas de Zamora, GBA',
+        notas: 'Pendiente de inicio de relevamiento de campo.',
+        etapas: {
+          relevamiento: 'yellow', contrato: 'gray', gestion_candidato: 'gray',
+          mc_cimentacion: 'gray', ingenieria: 'gray', energia_pilar: 'gray',
+          ee_conexion: 'gray', logistica_previa: 'gray', estructura_prov: 'gray'
+        }
+      },
+      {
+        id: 'proj-105',
+        boardId: 'board-1',
+        code: 'TU00415',
+        title: 'Quilmes Oeste Centro',
+        columnId: 'pendientes',
+        contratista: 'Telecom Infraestructuras',
+        estructura: 'Poste Hormigón H30',
+        fechaInicio: '10/11/26',
+        fechaFin: '20/12/26',
+        prioridad: 'Alta',
+        ubicacion: 'Quilmes, BAE',
+        notas: 'Validando factibilidad técnica de terreno.',
+        etapas: {
+          relevamiento: 'green', contrato: 'gray', gestion_candidato: 'gray',
+          mc_cimentacion: 'gray', ingenieria: 'gray', energia_pilar: 'gray',
+          ee_conexion: 'gray', logistica_previa: 'gray', estructura_prov: 'gray'
+        }
+      }
+    ];
+
+    const playPipSound = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        if (!window.audioCtx) window.audioCtx = new AudioContext();
+        if (window.audioCtx.state === 'suspended') window.audioCtx.resume();
+        const ctx = window.audioCtx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.08);
+        
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+      } catch (e) {
+        console.warn("Audio error:", e);
+      }
+    };
+
+    function StageRow({ label, status = 'gray', onSelect }) {
+      return (
+        <div className="flex items-center justify-between gap-1 min-w-0">
+          <span className="text-[9.5px] font-extrabold text-[#1e3a8a] uppercase tracking-tight leading-tight truncate mr-0.5">
+            {label}
+          </span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Red Circle */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(status === 'red' ? 'gray' : 'red'); }}
+              title={`${label}: Alerta Crítica (Rojo)`}
+              className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+                status === 'red'
+                  ? 'bg-red-600 scale-125 shadow-xs shadow-red-500 ring-2 ring-red-300/80 z-10'
+                  : 'bg-red-200/60 hover:bg-red-300/80 opacity-70'
+              }`}
+            />
+
+            {/* Yellow Circle */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(status === 'yellow' ? 'gray' : 'yellow'); }}
+              title={`${label}: En Proceso / Advertencia (Amarillo)`}
+              className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+                status === 'yellow'
+                  ? 'bg-amber-400 scale-125 shadow-xs shadow-amber-400 ring-2 ring-amber-200/80 z-10'
+                  : 'bg-amber-200/60 hover:bg-amber-300/80 opacity-70'
+              }`}
+            />
+
+            {/* Green Circle */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(status === 'green' ? 'gray' : 'green'); }}
+              title={`${label}: Completado / Aprobado (Verde)`}
+              className={`w-3.5 h-3.5 rounded-full transition-all cursor-pointer ${
+                status === 'green'
+                  ? 'bg-emerald-500 scale-125 shadow-xs shadow-emerald-500 ring-2 ring-emerald-200/80 z-10'
+                  : 'bg-emerald-200/60 hover:bg-emerald-300/80 opacity-70'
+              }`}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    function ProjectCard({
+      proj,
+      index,
+      colProjectsCount,
+      onDragStart,
+      onSelectProject,
+      onMoveVertical,
+      onSetEtapaState,
+      onDuplicate,
+      onDelete,
+      onUpdateProject
+    }) {
+      const [isEditingTitle, setIsEditingTitle] = useState(false);
+      const [titleVal, setTitleVal] = useState(proj.title);
+      const [isEditingContratista, setIsEditingContratista] = useState(false);
+      const [contratistaVal, setContratistaVal] = useState(proj.contratista);
+      const [isEditingEstructura, setIsEditingEstructura] = useState(false);
+      const [estructuraVal, setEstructuraVal] = useState(proj.estructura);
+
+      useEffect(() => {
+        setTitleVal(proj.title);
+      }, [proj.title]);
+
+      useEffect(() => {
+        setContratistaVal(proj.contratista);
+      }, [proj.contratista]);
+
+      useEffect(() => {
+        setEstructuraVal(proj.estructura);
+      }, [proj.estructura]);
+
+      const handleSaveTitle = () => {
+        setIsEditingTitle(false);
+        if (titleVal.trim() && titleVal !== proj.title) {
+          onUpdateProject({ ...proj, title: titleVal.trim() });
+        } else {
+          setTitleVal(proj.title);
+        }
+      };
+
+      const handleSaveContratista = () => {
+        setIsEditingContratista(false);
+        if (contratistaVal.trim() && contratistaVal !== proj.contratista) {
+          onUpdateProject({ ...proj, contratista: contratistaVal.trim() });
+        } else {
+          setContratistaVal(proj.contratista);
+        }
+      };
+
+      const handleSaveEstructura = () => {
+        setIsEditingEstructura(false);
+        if (estructuraVal.trim() && estructuraVal !== proj.estructura) {
+          onUpdateProject({ ...proj, estructura: estructuraVal.trim() });
+        } else {
+          setEstructuraVal(proj.estructura);
+        }
+      };
+
+      return (
+        <div
+          draggable
+          onDragStart={(e) => onDragStart(e, proj.id)}
+          className="card-slide-item bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all group relative cursor-grab active:cursor-grabbing"
+        >
+          {/* Card Header: Title & Priority */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              {isEditingTitle ? (
+                <input
+                  type="text"
+                  value={titleVal}
+                  onChange={(e) => setTitleVal(e.target.value)}
+                  onBlur={handleSaveTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') { setTitleVal(proj.title); setIsEditingTitle(false); }
+                  }}
+                  autoFocus
+                  className="w-full text-xs font-extrabold text-slate-800 bg-sky-50 border border-sky-400 rounded px-1.5 py-0.5 focus:outline-none"
+                />
+              ) : (
+                <div className="flex items-center gap-1 group/title">
+                  <h4
+                    onClick={() => setIsEditingTitle(true)}
+                    className="text-xs font-extrabold text-slate-800 hover:text-sky-600 cursor-pointer transition-colors leading-snug truncate"
+                    title="Haz clic para editar el título directamente"
+                  >
+                    {proj.title}
+                  </h4>
+                  <button
+                    onClick={() => setIsEditingTitle(true)}
+                    className="opacity-0 group-hover/title:opacity-100 text-slate-400 hover:text-sky-600 text-[10px] p-0.5 transition-opacity"
+                    title="Editar título"
+                  >
+                    <i className="fa-solid fa-pen"></i>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                proj.prioridad === 'Alta' ? 'bg-red-100 text-red-700 border border-red-200' :
+                proj.prioridad === 'Baja' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700'
+              }`}>
+                {proj.prioridad}
+              </span>
+              
+              {/* Vertical reorder buttons */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                <button
+                  onClick={() => onMoveVertical(proj.id, 'up')}
+                  disabled={index === 0}
+                  className="px-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 text-[10px]"
+                  title="Subir"
+                >
+                  <i className="fa-solid fa-chevron-up"></i>
+                </button>
+                <button
+                  onClick={() => onMoveVertical(proj.id, 'down')}
+                  disabled={index === colProjectsCount - 1}
+                  className="px-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 text-[10px]"
+                  title="Bajar"
+                >
+                  <i className="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Contractor, Estructura, Location & Dates Block */}
+          <div className="text-[11px] text-slate-600 mb-2.5 border-b border-slate-100 pb-2 space-y-1.5">
+            {/* Contratista y Ubicación */}
+            <div className="flex items-center justify-between gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <i className="fa-solid fa-user-gear text-slate-400 text-[10px]"></i>
+                {isEditingContratista ? (
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      list="contratistas-list"
+                      value={contratistaVal}
+                      onChange={(e) => setContratistaVal(e.target.value)}
+                      onBlur={handleSaveContratista}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveContratista();
+                        if (e.key === 'Escape') { setContratistaVal(proj.contratista); setIsEditingContratista(false); }
+                      }}
+                      autoFocus
+                      className="w-full text-[11px] font-semibold text-slate-800 bg-sky-50 border border-sky-400 rounded px-1.5 py-0.5 focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group/contratista truncate">
+                    <span
+                      onClick={() => setIsEditingContratista(true)}
+                      className="font-semibold text-slate-700 hover:text-sky-600 cursor-pointer transition-colors truncate"
+                      title="Haz clic para editar el contratista directamente"
+                    >
+                      {proj.contratista}
+                    </span>
+                    <button
+                      onClick={() => setIsEditingContratista(true)}
+                      className="opacity-0 group-hover/contratista:opacity-100 text-slate-400 hover:text-sky-600 text-[10px] p-0.5 transition-opacity"
+                      title="Editar contratista"
+                    >
+                      <i className="fa-solid fa-pen"></i>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-400 flex-shrink-0">
+                <i className="fa-solid fa-location-dot"></i>
+                <span className="truncate max-w-[90px]" title={proj.ubicacion}>{proj.ubicacion}</span>
+              </div>
+            </div>
+
+            {/* Estructura Homologada */}
+            <div className="flex items-center justify-between gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/80">
+              <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-tight flex items-center gap-1 flex-shrink-0">
+                <i className="fa-solid fa-cubes text-sky-600 text-[10px]"></i> Estructura:
+              </span>
+              {isEditingEstructura ? (
+                <input
+                  type="text"
+                  list="estructuras-list"
+                  value={estructuraVal}
+                  onChange={(e) => setEstructuraVal(e.target.value)}
+                  onBlur={handleSaveEstructura}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveEstructura();
+                    if (e.key === 'Escape') { setEstructuraVal(proj.estructura); setIsEditingEstructura(false); }
+                  }}
+                  autoFocus
+                  className="w-full text-[10px] font-bold text-slate-800 bg-sky-50 border border-sky-400 rounded px-1 py-0.5 focus:outline-none"
+                />
+              ) : (
+                <div className="flex items-center gap-1 group/estructura truncate min-w-0">
+                  <span
+                    onClick={() => setIsEditingEstructura(true)}
+                    className="text-[10px] font-extrabold text-slate-800 hover:text-sky-600 cursor-pointer transition-colors truncate"
+                    title="Haz clic para editar la estructura directamente"
+                  >
+                    {proj.estructura}
+                  </span>
+                  <button
+                    onClick={() => setIsEditingEstructura(true)}
+                    className="opacity-0 group-hover/estructura:opacity-100 text-slate-400 hover:text-sky-600 text-[9px] p-0.5 transition-opacity flex-shrink-0"
+                    title="Editar estructura"
+                  >
+                    <i className="fa-solid fa-pen"></i>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Inicio y Fin de Obra */}
+            <div className="flex items-center justify-between text-[10px] bg-sky-50/50 px-2 py-1 rounded-md border border-sky-100/80 text-slate-600">
+              <div className="flex items-center gap-1" title="Fecha de inicio de obra">
+                <i className="fa-regular fa-calendar-plus text-emerald-600 text-[11px]"></i>
+                <span><strong className="font-semibold text-slate-700">Ini:</strong> {proj.fechaInicio || '-'}</span>
+              </div>
+              <div className="flex items-center gap-1" title="Fecha fin de obra">
+                <i className="fa-regular fa-calendar-check text-sky-600 text-[11px]"></i>
+                <span><strong className="font-semibold text-slate-700">Fin:</strong> {proj.fechaFin || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ESTADO DE LA OBRA */}
+          <div className="mb-2.5 bg-slate-50/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center justify-between mb-1.5 text-[9.5px] font-extrabold text-slate-600 uppercase tracking-tight">
+              <span className="flex items-center gap-1">
+                <i className="fa-solid fa-person-digging text-amber-600 text-[10px]"></i> Estado Obra:
+              </span>
+              {proj.estadoObra ? (
+                <span className="text-[9.5px] font-extrabold text-amber-800 bg-amber-100/80 border border-amber-300 px-1.5 py-0.2 rounded-md">
+                  {proj.estadoObra}
+                </span>
+              ) : (
+                <span className="text-[9px] font-normal text-slate-400 italic">Sin asignar</span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {ESTADOS_OBRA_LIST.map((eObra) => {
+                const isActive = proj.estadoObra === eObra;
+                return (
+                  <button
+                    key={eObra}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateProject({
+                        ...proj,
+                        estadoObra: isActive ? '' : eObra
+                      });
+                    }}
+                    className={`py-1 px-0.5 text-[9.5px] font-bold rounded-lg transition-all text-center leading-tight truncate cursor-pointer ${
+                      isActive
+                        ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300/80 font-extrabold scale-[1.02]'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/90'
+                    }`}
+                    title={isActive ? `Quitar resaltado ${eObra}` : `Marcar estado como ${eObra}`}
+                  >
+                    {eObra}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ETAPAS WITH TRAFFIC LIGHT CIRCLES */}
+          <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-200/80">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 items-center">
+              {ETAPAS_LIST.map(stg => (
+                <StageRow
+                  key={stg.id}
+                  label={stg.label}
+                  status={proj.etapas?.[stg.id]}
+                  onSelect={(col) => onSetEtapaState(proj.id, stg.id, col)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom Card Actions */}
+          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span className="text-[10px] font-mono text-slate-400 font-semibold">{proj.code || proj.id}</span>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onDuplicate(proj)}
+                className="text-slate-400 hover:text-sky-600 transition-colors"
+                title="Duplicar obra"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              <button
+                onClick={() => onSelectProject(proj)}
+                className="text-slate-400 hover:text-sky-600 transition-colors"
+                title="Ver/Editar modal completo"
+              >
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button
+                onClick={() => onDelete(proj.id)}
+                className="text-slate-400 hover:text-red-500 transition-colors"
+                title="Eliminar obra"
+              >
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    function ProjectModal({ project, columns, onClose, onSave }) {
+      const [formData, setFormData] = useState(() => {
+        if (project) return { ...project };
+        return {
+          title: '',
+          code: 'OBR-' + Math.floor(100 + Math.random() * 900),
+          columnId: columns[0]?.id || 'pendientes',
+          contratista: CONTRATISTAS_DEFAULT[0],
+          estructura: ESTRUCTURAS_DEFAULT[0],
+          estadoObra: 'Excavación',
+          fechaInicio: new Date().toLocaleDateString('es-AR'),
+          fechaFin: new Date(Date.now() + 30*24*60*60*1000).toLocaleDateString('es-AR'),
+          prioridad: 'Media',
+          ubicacion: '',
+          notas: '',
+          etapas: ETAPAS_LIST.reduce((acc, stage) => ({ ...acc, [stage.id]: 'gray' }), {})
+        };
+      });
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(formData);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <i className="fa-solid fa-helmet-safety text-sky-400"></i>
+                {project ? `Editar Obra: ${project.title}` : 'Crear Nueva Obra'}
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto custom-scrollbar space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Título de Sitio / Obra *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    placeholder="Ej: Alderetes M1"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estado / Columna</label>
+                  <select
+                    value={formData.columnId}
+                    onChange={(e) => setFormData({ ...formData, columnId: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    {columns.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Prioridad</label>
+                  <select
+                    value={formData.prioridad}
+                    onChange={(e) => setFormData({ ...formData, prioridad: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="Baja">Baja</option>
+                    <option value="Media">Media</option>
+                    <option value="Alta">Alta</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Contratista</label>
+                  <input
+                    type="text"
+                    list="contratistas-list"
+                    value={formData.contratista}
+                    onChange={(e) => setFormData({ ...formData, contratista: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estructura / Sitio</label>
+                  <input
+                    type="text"
+                    list="estructuras-list"
+                    value={formData.estructura}
+                    onChange={(e) => setFormData({ ...formData, estructura: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estado de la Obra</label>
+                  <select
+                    value={formData.estadoObra || ''}
+                    onChange={(e) => setFormData({ ...formData, estadoObra: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="">Sin definir</option>
+                    {ESTADOS_OBRA_LIST.map(eObra => (
+                      <option key={eObra} value={eObra}>{eObra}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Ubicación / Zona</label>
+                  <input
+                    type="text"
+                    value={formData.ubicacion}
+                    onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    placeholder="Ej: Tucumán, Alderetes"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Fecha Inicio</label>
+                  <input
+                    type="text"
+                    value={formData.fechaInicio}
+                    onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Fecha Fin Prometida</label>
+                  <input
+                    type="text"
+                    value={formData.fechaFin}
+                    onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Notas / Observaciones</label>
+                  <textarea
+                    rows="3"
+                    value={formData.notas}
+                    onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    placeholder="Detalles sobre permisos, bloqueos o avance de obra..."
+                  />
+                </div>
+              </div>
+
+              {/* Etapas Traffic Light Config in Modal */}
+              <div className="pt-2 border-t border-slate-200">
+                <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                  <i className="fa-solid fa-traffic-light text-amber-500"></i> Estado de Etapas
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  {ETAPAS_LIST.map((stage) => (
+                    <StageRow
+                      key={stage.id}
+                      label={stage.label}
+                      status={formData.etapas?.[stage.id] || 'gray'}
+                      onSelect={(newStatus) => {
+                        setFormData({
+                          ...formData,
+                          etapas: { ...formData.etapas, [stage.id]: newStatus }
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm transition-colors"
+                >
+                  {project ? 'Guardar Cambios' : 'Crear Obra'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function ManageColumnsModal({ columns, onClose, onAddColumn, onDeleteColumn, onMoveColumn }) {
+      const [newColName, setNewColName] = useState('');
+      const [selectedTheme, setSelectedTheme] = useState(COLOR_THEMES[0].id);
+      const [selectedIcon, setSelectedIcon] = useState(ICON_OPTIONS[0].icon);
+
+      const handleAdd = (e) => {
+        e.preventDefault();
+        if (!newColName.trim()) return;
+        const theme = COLOR_THEMES.find(t => t.id === selectedTheme) || COLOR_THEMES[0];
+        onAddColumn({
+          name: newColName.trim(),
+          color: theme.color,
+          bg: theme.bg,
+          text: theme.text,
+          badge: theme.badge,
+          icon: selectedIcon
+        });
+        setNewColName('');
+      };
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <i className="fa-solid fa-columns text-amber-400"></i>
+                Gestionar Estados / Columnas
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+              {/* Existing Columns List */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Columnas Actuales</h4>
+                <div className="space-y-2">
+                  {columns.map((col, idx) => (
+                    <div key={col.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <i className={`${col.icon} ${col.text} text-sm`}></i>
+                        <span className="text-xs font-bold text-slate-800 truncate">{col.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onMoveColumn(col.id, 'up')}
+                          disabled={idx === 0}
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 text-xs"
+                          title="Mover a la izquierda"
+                        >
+                          <i className="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button
+                          onClick={() => onMoveColumn(col.id, 'down')}
+                          disabled={idx === columns.length - 1}
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 text-xs"
+                          title="Mover a la derecha"
+                        >
+                          <i className="fa-solid fa-chevron-right"></i>
+                        </button>
+                        <button
+                          onClick={() => onDeleteColumn(col.id)}
+                          disabled={columns.length <= 1}
+                          className="p-1 text-slate-400 hover:text-red-500 disabled:opacity-30 text-xs ml-1"
+                          title="Eliminar columna"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add New Column Form */}
+              <form onSubmit={handleAdd} className="border-t border-slate-200 pt-4 space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Agregar Nueva Columna</h4>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre del Estado</label>
+                  <input
+                    type="text"
+                    required
+                    value={newColName}
+                    onChange={(e) => setNewColName(e.target.value)}
+                    placeholder="Ej: En Pruebas, Aprobación..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Color / Tema</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {COLOR_THEMES.map(theme => (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => setSelectedTheme(theme.id)}
+                        className={`p-2 rounded-lg border text-xs font-semibold flex items-center justify-between transition-all ${
+                          selectedTheme === theme.id ? 'ring-2 ring-sky-500 border-sky-500 bg-sky-50' : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <span className="truncate">{theme.label}</span>
+                        <span className={`w-3 h-3 rounded-full ${theme.bg} ${theme.color} border`}></span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Ícono</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ICON_OPTIONS.map(ico => (
+                      <button
+                        key={ico.id}
+                        type="button"
+                        onClick={() => setSelectedIcon(ico.icon)}
+                        className={`p-2 rounded-lg border text-xs transition-all ${
+                          selectedIcon === ico.icon ? 'bg-sky-500 text-white border-sky-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200'
+                        }`}
+                        title={ico.label}
+                      >
+                        <i className={ico.icon}></i>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg shadow-xs transition-colors mt-2"
+                >
+                  + Agregar Columna
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ManageBoardsModal({ boards, activeBoardId, onClose, onSelectBoard, onSaveBoards }) {
+      const [boardList, setBoardList] = useState([...boards]);
+      const [newBoardName, setNewBoardName] = useState('');
+      const [newBoardDesc, setNewBoardDesc] = useState('');
+
+      const handleAddBoard = (e) => {
+        e.preventDefault();
+        if (!newBoardName.trim()) return;
+        const newB = {
+          id: 'board-' + Date.now(),
+          name: newBoardName.trim(),
+          description: newBoardDesc.trim() || 'Tablero de seguimiento'
+        };
+        const updated = [...boardList, newB];
+        setBoardList(updated);
+        onSaveBoards(updated);
+        onSelectBoard(newB.id);
+        setNewBoardName('');
+        setNewBoardDesc('');
+      };
+
+      const handleDeleteBoard = (id) => {
+        if (boardList.length <= 1) return;
+        const updated = boardList.filter(b => b.id !== id);
+        setBoardList(updated);
+        onSaveBoards(updated);
+        if (activeBoardId === id) {
+          onSelectBoard(updated[0].id);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <i className="fa-solid fa-layer-group text-sky-400"></i>
+                Gestionar Tableros
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Tableros Disponibles</h4>
+                {boardList.map(b => (
+                  <div
+                    key={b.id}
+                    onClick={() => onSelectBoard(b.id)}
+                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                      activeBoardId === b.id ? 'bg-sky-50 border-sky-400 ring-1 ring-sky-400' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800">{b.name}</h5>
+                      <p className="text-[10px] text-slate-500">{b.description}</p>
+                    </div>
+                    {boardList.length > 1 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteBoard(b.id); }}
+                        className="p-1 text-slate-400 hover:text-red-500 text-xs"
+                        title="Eliminar tablero"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleAddBoard} className="border-t border-slate-200 pt-4 space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Crear Nuevo Tablero</h4>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nombre del tablero..."
+                  value={newBoardName}
+                  onChange={(e) => setNewBoardName(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Descripción corta..."
+                  value={newBoardDesc}
+                  onChange={(e) => setNewBoardDesc(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg shadow-xs transition-colors"
+                >
+                  + Crear Tablero
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AnalyticsModal({ projects, columns, onClose }) {
+      const totalObras = projects.length;
+
+      const columnStats = useMemo(() => {
+        return columns.map(c => ({
+          name: c.name,
+          count: projects.filter(p => p.columnId === c.id).length
+        }));
+      }, [projects, columns]);
+
+      const redAlertsCount = useMemo(() => {
+        return projects.filter(p => Object.values(p.etapas || {}).some(v => v === 'red')).length;
+      }, [projects]);
+
+      const yellowAlertsCount = useMemo(() => {
+        return projects.filter(p => Object.values(p.etapas || {}).some(v => v === 'yellow')).length;
+      }, [projects]);
+
+      const contractorStats = useMemo(() => {
+        const counts = {};
+        projects.forEach(p => {
+          const c = p.contratista || 'Sin definir';
+          counts[c] = (counts[c] || 0) + 1;
+        });
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      }, [projects]);
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <i className="fa-solid fa-chart-pie text-sky-400"></i>
+                Métricas del Tablero
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+              {/* Cards Summary */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Total Obras</span>
+                  <div className="text-2xl font-black text-slate-800 mt-0.5">{totalObras}</div>
+                </div>
+                <div className="bg-red-50 p-3 rounded-xl border border-red-200 text-center">
+                  <span className="text-[10px] font-bold text-red-600 uppercase">Alertas Críticas</span>
+                  <div className="text-2xl font-black text-red-700 mt-0.5">{redAlertsCount}</div>
+                </div>
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-center">
+                  <span className="text-[10px] font-bold text-amber-600 uppercase">En Advertencia</span>
+                  <div className="text-2xl font-black text-amber-700 mt-0.5">{yellowAlertsCount}</div>
+                </div>
+              </div>
+
+              {/* By Status */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Obras por Estado</h4>
+                <div className="space-y-2">
+                  {columnStats.map(st => (
+                    <div key={st.name} className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-600">{st.name}</span>
+                      <div className="flex items-center gap-2 w-1/2">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-sky-500 rounded-full"
+                            style={{ width: `${totalObras ? (st.count / totalObras) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="font-bold text-slate-800 w-6 text-right">{st.count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* By Contractor */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Obras por Contratista</h4>
+                <div className="space-y-1.5">
+                  {contractorStats.map(([c, count]) => (
+                    <div key={c} className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <span className="font-semibold text-slate-700">{c}</span>
+                      <span className="font-bold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-full text-[10px]">{count} obras</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ConfirmModal({ title, message, onConfirm, onCancel }) {
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">
+              <i className="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 className="text-sm font-extrabold text-slate-800 mb-1">{title}</h3>
+            <p className="text-xs text-slate-500 mb-5">{message}</p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg shadow-sm transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function DeleteColumnModal({ columns, targetColId, onConfirm, onCancel }) {
+      const otherCols = columns.filter(c => c.id !== targetColId);
+      const [reassignId, setReassignId] = useState(otherCols[0]?.id || '');
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+            <h3 className="text-sm font-bold text-slate-800 mb-2">Reasignar Obras de la Columna</h3>
+            <p className="text-xs text-slate-600 mb-4">
+              Seleccione la columna de destino para mover las obras existentes antes de eliminar este estado.
+            </p>
+            <select
+              value={reassignId}
+              onChange={(e) => setReassignId(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold mb-5 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+            >
+              {otherCols.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => onConfirm(reassignId)}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg"
+              >
+                Confirmar y Eliminar Columna
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [boards, setBoards] = useState(() => {
+        const saved = localStorage.getItem('obras_sites_boards');
+        return saved ? JSON.parse(saved) : DEFAULT_BOARDS;
+      });
+
+      const [activeBoardId, setActiveBoardId] = useState(() => {
+        return localStorage.getItem('obras_sites_active_board') || 'board-1';
+      });
+
+      const [columns, setColumns] = useState(() => {
+        const saved = localStorage.getItem('obras_sites_columns');
+        return saved ? JSON.parse(saved) : DEFAULT_COLUMNS;
+      });
+
+      const [projects, setProjects] = useState(() => {
+        const saved = localStorage.getItem('obras_sites_projects');
+        return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
+      });
+
+      const [searchQuery, setSearchQuery] = useState('');
+      const [filterContratista, setFilterContratista] = useState('ALL');
+      const [filterAlert, setFilterAlert] = useState('ALL');
+
+      const [selectedProject, setSelectedProject] = useState(null);
+      const [isCreating, setIsCreating] = useState(false);
+      const [showManageColumnsModal, setShowManageColumnsModal] = useState(false);
+      const [showManageBoardsModal, setShowManageBoardsModal] = useState(false);
+      const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+
+      const [deleteTargetId, setDeleteTargetId] = useState(null);
+      const [deleteColumnTarget, setDeleteColumnTarget] = useState(null);
+
+      const [editingColId, setEditingColId] = useState(null);
+      const [editingColName, setEditingColName] = useState('');
+
+      const [draggedCardId, setDraggedCardId] = useState(null);
+      const [soundEnabled, setSoundEnabled] = useState(true);
+      const [toastMessage, setToastMessage] = useState('');
+
+      const columnRefs = useRef({});
+
+      // LocalStorage Sync
+      useEffect(() => {
+        localStorage.setItem('obras_sites_boards', JSON.stringify(boards));
+      }, [boards]);
+
+      useEffect(() => {
+        localStorage.setItem('obras_sites_active_board', activeBoardId);
+      }, [activeBoardId]);
+
+      useEffect(() => {
+        localStorage.setItem('obras_sites_columns', JSON.stringify(columns));
+      }, [columns]);
+
+      const saveProjectToStore = (newProjects, updatedProj = null) => {
+        setProjects(newProjects);
+        localStorage.setItem('obras_sites_projects', JSON.stringify(newProjects));
+        if (soundEnabled) playPipSound();
+      };
+
+      const showNotification = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3000);
+      };
+
+      const handleScrollColumn = (colId, direction) => {
+        const el = columnRefs.current[colId];
+        if (el) {
+          el.scrollTo({
+            top: direction === 'top' ? 0 : el.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      };
+
+      const handleSaveColumnName = (colId) => {
+        if (editingColName.trim()) {
+          setColumns(cols => cols.map(c => c.id === colId ? { ...c, name: editingColName.trim() } : c));
+        }
+        setEditingColId(null);
+      };
+
+      const handleAddColumn = (colData) => {
+        const newCol = {
+          id: 'col-' + Date.now(),
+          ...colData
+        };
+        setColumns([...columns, newCol]);
+        showNotification(`Columna "${newCol.name}" agregada.`);
+      };
+
+      const handleMoveColumnPosition = (colId, direction) => {
+        const idx = columns.findIndex(c => c.id === colId);
+        if (idx === -1) return;
+        const newCols = [...columns];
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx >= 0 && targetIdx < newCols.length) {
+          const temp = newCols[idx];
+          newCols[idx] = newCols[targetIdx];
+          newCols[targetIdx] = temp;
+          setColumns(newCols);
+        }
+      };
+
+      const handleDeleteColumn = (colId, reassignColId) => {
+        const updatedProjects = projects.map(p => p.columnId === colId ? { ...p, columnId: reassignColId } : p);
+        const updatedCols = columns.filter(c => c.id !== colId);
+        setColumns(updatedCols);
+        saveProjectToStore(updatedProjects);
+        setDeleteColumnTarget(null);
+        showNotification('Columna eliminada y obras reasignadas.');
+      };
+
+      const handleSetEtapaState = (projId, etapaKey, newStatus) => {
+        const updatedProjects = projects.map(p => {
+          if (p.id === projId) {
+            return {
+              ...p,
+              etapas: {
+                ...(p.etapas || {}),
+                [etapaKey]: newStatus
+              }
+            };
+          }
+          return p;
+        });
+        saveProjectToStore(updatedProjects);
+      };
+
+      const handleMoveCardVertical = (projId, direction) => {
+        const target = projects.find(p => p.id === projId);
+        if (!target) return;
+
+        const colProjects = projects.filter(p => p.columnId === target.columnId && (p.boardId || 'board-1') === activeBoardId);
+        const currentIndex = colProjects.findIndex(p => p.id === projId);
+
+        if (direction === 'up' && currentIndex > 0) {
+          const swapTarget = colProjects[currentIndex - 1];
+          swapProjectsInList(projId, swapTarget.id);
+        } else if (direction === 'down' && currentIndex < colProjects.length - 1) {
+          const swapTarget = colProjects[currentIndex + 1];
+          swapProjectsInList(projId, swapTarget.id);
+        }
+      };
+
+      const swapProjectsInList = (id1, id2) => {
+        const idx1 = projects.findIndex(p => p.id === id1);
+        const idx2 = projects.findIndex(p => p.id === id2);
+        if (idx1 !== -1 && idx2 !== -1) {
+          const newProjects = [...projects];
+          const temp = newProjects[idx1];
+          newProjects[idx1] = newProjects[idx2];
+          newProjects[idx2] = temp;
+          saveProjectToStore(newProjects);
+        }
+      };
+
+      const handleSelectBoard = (bId) => {
+        setActiveBoardId(bId);
+      };
+
+      const saveBoardsToStore = (newBoards) => {
+        setBoards(newBoards);
+      };
+
+      const handleCreateProject = (newProjData) => {
+        const id = 'proj-' + Date.now();
+        const newProj = {
+          id,
+          boardId: activeBoardId,
+          code: newProjData.code || ('OBR-' + Math.floor(100 + Math.random() * 900)),
+          title: newProjData.title || 'Nueva Obra',
+          columnId: newProjData.columnId || (columns[0]?.id || 'pendientes'),
+          contratista: newProjData.contratista || CONTRATISTAS_DEFAULT[0],
+          estructura: newProjData.estructura || ESTRUCTURAS_DEFAULT[0],
+          estadoObra: newProjData.estadoObra || '',
+          fechaInicio: newProjData.fechaInicio || '1/11/26',
+          fechaFin: newProjData.fechaFin || '30/11/26',
+          prioridad: newProjData.prioridad || 'Media',
+          ubicacion: newProjData.ubicacion || 'Por definir',
+          notas: newProjData.notas || '',
+          etapas: newProjData.etapas || {
+            relevamiento: 'gray', contrato: 'gray', gestion_candidato: 'gray',
+            mc_cimentacion: 'gray', ingenieria: 'gray', energia_pilar: 'gray',
+            ee_conexion: 'gray', logistica_previa: 'gray', estructura_prov: 'gray'
+          }
+        };
+
+        const nextState = [newProj, ...projects];
+        saveProjectToStore(nextState, newProj);
+        setIsCreating(false);
+        showNotification(`Obra "${newProj.title}" creada.`);
+      };
+
+      const handleUpdateProject = (updatedProj) => {
+        const nextState = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
+        saveProjectToStore(nextState, updatedProj);
+        setSelectedProject(null);
+        showNotification(`Obra "${updatedProj.title}" actualizada.`);
+      };
+
+      const handleDuplicateProject = (proj) => {
+        const dupId = 'proj-' + Date.now();
+        const dupProj = { ...proj, id: dupId, title: proj.title + ' (Copia)' };
+        const nextState = [dupProj, ...projects];
+        saveProjectToStore(nextState, dupProj);
+        if (selectedProject) setSelectedProject(null);
+        showNotification(`Obra duplicada correctamente.`);
+      };
+
+      const handleDeleteProject = (projId) => {
+        const nextState = projects.filter(p => p.id !== projId);
+        saveProjectToStore(nextState, null);
+        setDeleteTargetId(null);
+        if (selectedProject?.id === projId) setSelectedProject(null);
+        showNotification('Obra eliminada.');
+      };
+
+      const handleDragStart = (e, projId) => {
+        e.dataTransfer.setData('text/plain', projId);
+        setDraggedCardId(projId);
+      };
+
+      const handleDragOver = (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over-column');
+      };
+
+      const handleDragLeave = (e) => {
+        e.currentTarget.classList.remove('drag-over-column');
+      };
+
+      const handleDrop = (e, targetColId) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over-column');
+        const projId = e.dataTransfer.getData('text/plain') || draggedCardId;
+        if (!projId) return;
+
+        const targetProj = projects.find(p => p.id === projId);
+        if (targetProj && targetProj.columnId !== targetColId) {
+          const updatedProj = { ...targetProj, columnId: targetColId };
+          const nextProjects = projects.map(p => p.id === projId ? updatedProj : p);
+          saveProjectToStore(nextProjects, updatedProj);
+          showNotification(`Obra movida a ${columns.find(c => c.id === targetColId)?.name || targetColId}`);
+        }
+        setDraggedCardId(null);
+      };
+
+      const activeBoard = useMemo(() => {
+        return boards.find(b => b.id === activeBoardId) || boards[0] || DEFAULT_BOARDS[0];
+      }, [boards, activeBoardId]);
+
+      const currentBoardProjects = useMemo(() => {
+        return projects.filter(p => (p.boardId || 'board-1') === activeBoardId);
+      }, [projects, activeBoardId]);
+
+      const filteredProjects = useMemo(() => {
+        return currentBoardProjects.filter(p => {
+          const q = searchQuery.toLowerCase();
+          const matchesQuery = !q || 
+            p.title.toLowerCase().includes(q) || 
+            p.contratista.toLowerCase().includes(q) || 
+            p.ubicacion.toLowerCase().includes(q);
+
+          const matchesContratista = filterContratista === 'ALL' || p.contratista === filterContratista;
+
+          let matchesAlert = true;
+          if (filterAlert === 'RED') {
+            matchesAlert = Object.values(p.etapas || {}).some(v => v === 'red');
+          } else if (filterAlert === 'YELLOW') {
+            matchesAlert = Object.values(p.etapas || {}).some(v => v === 'yellow');
+          }
+
+          return matchesQuery && matchesContratista && matchesAlert;
+        });
+      }, [currentBoardProjects, searchQuery, filterContratista, filterAlert]);
+
+      const availableContratistas = useMemo(() => {
+        const list = new Set(CONTRATISTAS_DEFAULT);
+        projects.forEach(p => { if (p.contratista) list.add(p.contratista); });
+        return Array.from(list);
+      }, [projects]);
+
+      return (
+        <div className="flex flex-col h-screen bg-slate-100 overflow-hidden">
+          {/* Header Bar */}
+          <header className="bg-slate-900 text-white border-b border-slate-800 shadow-lg flex-shrink-0 z-20">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                
+                {/* Title & Brand */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="bg-white/95 rounded-xl p-1.5 shadow-md flex items-center justify-center h-12 px-3 border border-slate-200/40">
+                    <svg
+                      className="h-9 w-auto"
+                      viewBox="0 0 220 60"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ shapeRendering: 'geometricPrecision', textRendering: 'geometricPrecision' }}
+                    >
+                      <defs>
+                        <linearGradient id="totalRedGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#ef4444" />
+                          <stop offset="100%" stopColor="#b91c1c" />
+                        </linearGradient>
+                        <linearGradient id="steelGrad" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#94a3b8" />
+                          <stop offset="50%" stopColor="#475569" />
+                          <stop offset="100%" stopColor="#1e293b" />
+                        </linearGradient>
+                        <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
+                          <feDropShadow dx="0.5" dy="1.2" stdDeviation="0.8" floodColor="#0f172a" floodOpacity="0.2" />
+                        </filter>
+                      </defs>
+
+                      <g id="hd-total-obras-logo" filter="url(#logoShadow)">
+                        <path d="M 22 5 C 16.5 5 12 9 12 14 C 12 19 16.5 23 22 23 C 27.5 23 32 19 32 14 C 32 9 27.5 5 22 5 Z M 22 9 C 24.8 9 27 11.2 27 14 C 27 16.8 24.8 19 22 19 C 19.2 19 17 16.8 17 14 C 17 11.2 19.2 9 22 9 Z" fill="url(#steelGrad)"/>
+                        <path d="M 22 21 C 20 21 19 23 19 25 C 19 32 12 33 12 41 C 12 48 18 52 24 52 C 28 52 31 49 31 45 C 31 42 28.5 40 25.5 40 C 23.5 40 22 41.5 22 43 C 22 44.2 23 45 24 45 C 22 47 17 46 17 41 C 17 36 24 33 24 25 C 24 23 23 21 22 21 Z" fill="url(#totalRedGrad)" />
+                        <path d="M 8 33 C 5.5 33 3.5 35 3.5 37.5 L 3.5 48.5 C 3.5 51 5.5 53 8 53 L 28 53 C 30.5 53 32.5 51 32.5 48.5 L 32.5 37.5 C 32.5 35 30.5 33 28 33 Z M 8.5 37 L 27.5 37 C 28.3 37 29 37.7 29 38.5 L 29 47.5 C 29 48.3 28.3 49 27.5 49 L 8.5 49 C 7.7 49 7 48.3 7 47.5 L 7 38.5 C 7 37.7 7.7 37 8.5 37 Z" fill="url(#steelGrad)"/>
+                        <text x="40" y="28" fontFamily="'Inter', sans-serif" fontWeight="900" fontSize="29" fill="url(#totalRedGrad)" letterSpacing="-0.5">Total</text>
+                        <text x="38" y="53" fontFamily="'Inter', sans-serif" fontWeight="800" fontSize="25" fill="#334155" letterSpacing="-0.5">bras</text>
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <i className="fa-solid fa-layer-group text-sky-400"></i>
+                    <select
+                      value={activeBoardId}
+                      onChange={(e) => handleSelectBoard(e.target.value)}
+                      className="bg-transparent text-sm font-semibold text-white focus:outline-none cursor-pointer pr-2"
+                    >
+                      {boards.map(b => (
+                        <option key={b.id} value={b.id} className="bg-slate-900 text-white">
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowManageBoardsModal(true)}
+                      title="Gestionar Tableros"
+                      className="text-slate-400 hover:text-white transition-colors ml-1 p-1"
+                    >
+                      <i className="fa-solid fa-gear text-xs"></i>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Header Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`p-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      soundEnabled ? 'bg-slate-800 text-sky-400 hover:bg-slate-700' : 'bg-slate-800/50 text-slate-500 hover:bg-slate-800'
+                    }`}
+                    title={soundEnabled ? 'Sonido activado' : 'Sonido desactivado'}
+                  >
+                    <i className={`fa-solid ${soundEnabled ? 'fa-volume-high' : 'fa-volume-xmark'}`}></i>
+                  </button>
+
+                  <button
+                    onClick={() => setShowAnalyticsModal(true)}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-all flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-chart-pie text-sky-400"></i>
+                    <span>Métricas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowManageColumnsModal(true)}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-all flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-columns text-amber-400"></i>
+                    <span>Estados / Columnas</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsCreating(true)}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-lg shadow-md hover:shadow-sky-500/20 transition-all flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-plus"></i>
+                    <span>Nueva Obra</span>
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </header>
+
+          {/* Filter Bar */}
+          <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex-shrink-0 z-10 shadow-sm">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+              
+              <div className="relative w-full sm:w-72">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input
+                  type="text"
+                  placeholder="Buscar título, ubicación, contratista..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <i className="fa-solid fa-xmark text-xs"></i>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                {/* Contratista Filter */}
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span className="font-medium text-slate-500">Contratista:</span>
+                  <select
+                    value={filterContratista}
+                    onChange={(e) => setFilterContratista(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="ALL">Todos los contratistas</option>
+                    {availableContratistas.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Alert Filter */}
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span className="font-medium text-slate-500">Alertas:</span>
+                  <select
+                    value={filterAlert}
+                    onChange={(e) => setFilterAlert(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="ALL">Todas las obras</option>
+                    <option value="RED">Con Alerta Crítica (Rojo)</option>
+                    <option value="YELLOW">Con Alerta Media (Amarillo)</option>
+                  </select>
+                </div>
+
+                <div className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                  Obras: <span className="text-sky-600 font-bold">{filteredProjects.length}</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Kanban Board Container */}
+          <main className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6 custom-scrollbar">
+            <div className="flex gap-5 h-full items-start min-w-max pb-2">
+              {columns.map(col => {
+                const colProjects = filteredProjects.filter(p => p.columnId === col.id);
+                return (
+                  <div
+                    key={col.id}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, col.id)}
+                    className="w-80 flex-shrink-0 flex flex-col max-h-full bg-slate-200/70 border border-slate-300/80 rounded-xl shadow-sm transition-all duration-200"
+                  >
+                    {/* Column Header */}
+                    <div className={`p-3 border-b-2 ${col.color} bg-white rounded-t-xl flex items-center justify-between gap-2 shadow-xs`}>
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <i className={`${col.icon} ${col.text} text-sm flex-shrink-0`}></i>
+                        {editingColId === col.id ? (
+                          <input
+                            type="text"
+                            value={editingColName}
+                            onChange={(e) => setEditingColName(e.target.value)}
+                            onBlur={() => handleSaveColumnName(col.id)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveColumnName(col.id)}
+                            autoFocus
+                            className="text-xs font-bold px-1.5 py-0.5 border border-sky-400 rounded bg-sky-50 focus:outline-none w-32"
+                          />
+                        ) : (
+                          <h3
+                            onClick={() => { setEditingColId(col.id); setEditingColName(col.name); }}
+                            className="text-xs font-bold text-slate-800 tracking-wide truncate cursor-pointer hover:text-sky-600 transition-colors"
+                            title="Haz clic para renombrar"
+                          >
+                            {col.name}
+                          </h3>
+                        )}
+                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full ${col.badge}`}>
+                          {colProjects.length}
+                        </span>
+                      </div>
+
+                      {/* Column quick controls */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleScrollColumn(col.id, 'top')}
+                          className="p-1 text-slate-400 hover:text-slate-700 rounded transition-colors text-xs"
+                          title="Ir arriba"
+                        >
+                          <i className="fa-solid fa-angles-up"></i>
+                        </button>
+                        <button
+                          onClick={() => handleScrollColumn(col.id, 'bottom')}
+                          className="p-1 text-slate-400 hover:text-slate-700 rounded transition-colors text-xs"
+                          title="Ir abajo"
+                        >
+                          <i className="fa-solid fa-angles-down"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Column Scrollable Content */}
+                    <div
+                      ref={el => columnRefs.current[col.id] = el}
+                      className="p-3 overflow-y-auto custom-scrollbar flex-1 space-y-3"
+                    >
+                      {colProjects.length === 0 ? (
+                        <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center text-slate-400 text-xs">
+                          <i className="fa-regular fa-folder-open text-2xl mb-2 block text-slate-300"></i>
+                          Sin obras en este estado
+                        </div>
+                      ) : (
+                        colProjects.map((proj, index) => (
+                          <ProjectCard
+                            key={proj.id}
+                            proj={proj}
+                            index={index}
+                            colProjectsCount={colProjects.length}
+                            onDragStart={handleDragStart}
+                            onSelectProject={setSelectedProject}
+                            onMoveVertical={handleMoveCardVertical}
+                            onSetEtapaState={handleSetEtapaState}
+                            onDuplicate={handleDuplicateProject}
+                            onDelete={setDeleteTargetId}
+                            onUpdateProject={(updated) => {
+                              const nextProjects = projects.map(p => p.id === updated.id ? updated : p);
+                              saveProjectToStore(nextProjects, updated);
+                            }}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </main>
+
+          {/* Modals & Notifications */}
+          {isCreating && (
+            <ProjectModal
+              columns={columns}
+              onClose={() => setIsCreating(false)}
+              onSave={handleCreateProject}
+            />
+          )}
+
+          {selectedProject && (
+            <ProjectModal
+              project={selectedProject}
+              columns={columns}
+              onClose={() => setSelectedProject(null)}
+              onSave={handleUpdateProject}
+            />
+          )}
+
+          {showManageColumnsModal && (
+            <ManageColumnsModal
+              columns={columns}
+              onClose={() => setShowManageColumnsModal(false)}
+              onAddColumn={handleAddColumn}
+              onDeleteColumn={(colId) => setDeleteColumnTarget(colId)}
+              onMoveColumn={handleMoveColumnPosition}
+            />
+          )}
+
+          {showManageBoardsModal && (
+            <ManageBoardsModal
+              boards={boards}
+              activeBoardId={activeBoardId}
+              onClose={() => setShowManageBoardsModal(false)}
+              onSelectBoard={handleSelectBoard}
+              onSaveBoards={saveBoardsToStore}
+            />
+          )}
+
+          {showAnalyticsModal && (
+            <AnalyticsModal
+              projects={currentBoardProjects}
+              columns={columns}
+              onClose={() => setShowAnalyticsModal(false)}
+            />
+          )}
+
+          {deleteTargetId && (
+            <ConfirmModal
+              title="¿Eliminar esta obra?"
+              message="Esta acción es permanente y no se podrá deshacer."
+              onConfirm={() => handleDeleteProject(deleteTargetId)}
+              onCancel={() => setDeleteTargetId(null)}
+            />
+          )}
+
+          {deleteColumnTarget && (
+            <DeleteColumnModal
+              columns={columns}
+              targetColId={deleteColumnTarget}
+              onConfirm={(reassignId) => handleDeleteColumn(deleteColumnTarget, reassignId)}
+              onCancel={() => setDeleteColumnTarget(null)}
+            />
+          )}
+
+          {toastMessage && (
+            <div className="fixed bottom-5 right-5 bg-slate-900/90 text-white border border-slate-700 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xl z-50 flex items-center gap-2 transition-all animate-bounce">
+              <i className="fa-solid fa-circle-check text-sky-400"></i>
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
